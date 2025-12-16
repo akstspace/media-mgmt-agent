@@ -1,0 +1,28 @@
+services:
+  media-manager:
+    build: .
+    container_name: media-manager-ai
+    ports:
+      - "8501:8501"
+    volumes:
+      - media-data:/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+      - DATA_DIR=/data
+    networks:
+      - media-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  media-data:
+    driver: local
+
+networks:
+  media-network:
+    driver: bridge

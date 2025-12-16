@@ -1,0 +1,18 @@
+# Core AI and Agent dependencies
+acton-agent==0.0.6
+openai==2.12.0
+
+# Web UI
+streamlit==1.50.0
+
+# Security and encryption
+cryptography>=41.0.0
+
+# HTTP client
+requests==2.32.5
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic==2.12.5
+pydantic_core==2.41.5
+typing_extensions==4.15.0

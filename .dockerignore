@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+env/
+venv/
+ENV/
+*.egg-info/
+
+# Database and security
+*.db
+.encryption_key
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Backup
+*.bak
+*.backup
+
+# Logs
+*.log
+
+# Documentation (already in image)
+README.md
+
+# Docker
+docker-compose.yml
+Dockerfile
