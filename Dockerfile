@@ -22,7 +22,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install uv
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY media_agent.py .
