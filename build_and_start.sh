@@ -10,7 +10,7 @@ docker rm media-manager-ai 2>/dev/null || true
 # Run the container with volume attached
 docker run -d \
     --name media-manager-ai \
-    -p 8501:8501 \
+    --network host \
     -v media-data:/data \
     -e TZ=UTC \
     -e DATA_DIR=/data \

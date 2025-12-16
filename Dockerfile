@@ -30,6 +30,7 @@ COPY media_agent.py .
 COPY media_tools.py .
 COPY media_ui.py .
 COPY db_manager.py .
+COPY prompts.py .
 COPY start.sh .
 
 # Make startup script executable
