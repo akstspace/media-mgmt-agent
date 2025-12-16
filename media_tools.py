@@ -1896,7 +1896,10 @@ def configure_radarr(url: str, api_key: str) -> None:
     
     # Update all Radarr tools
     for tool in RADARR_TOOLS:
-        tool.url_template = tool.url_template.replace(old_url, url)
+        if old_url is not None:
+            tool.url_template = tool.url_template.replace(old_url, url)
+        else:
+            tool.url_template = tool.url_template.replace("None", url)
         tool.headers["X-Api-Key"] = api_key
 
 def configure_sonarr(url: str, api_key: str) -> None:
@@ -1914,5 +1917,8 @@ def configure_sonarr(url: str, api_key: str) -> None:
     
     # Update all Sonarr tools
     for tool in SONARR_TOOLS:
-        tool.url_template = tool.url_template.replace(old_url, url)
+        if old_url is not None:
+            tool.url_template = tool.url_template.replace(old_url, url)
+        else:
+            tool.url_template = tool.url_template.replace("None", url)
         tool.headers["X-Api-Key"] = api_key
