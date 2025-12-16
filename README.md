@@ -38,9 +38,3 @@ Access at `http://localhost:8501`
 - "What movies are downloading right now?"
 - "Show me upcoming TV episodes this week"
 - "Check my Radarr disk space"
-
-## Built With
-
-- [acton-agent](https://github.com/actonlabs/acton-agent) - AI agent framework
-- [Streamlit](https://streamlit.io) - Web interface
-- [OpenRouter](https://openrouter.ai) / [OpenAI](https://openai.com) - LLM providers
