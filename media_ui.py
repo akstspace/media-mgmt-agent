@@ -8,11 +8,20 @@ Features login system and encrypted credential storage.
 import os
 import sys
 from typing import Optional
+from datetime import datetime
 
 import streamlit as st
 
 from media_agent import MediaAgent
 from db_manager import DatabaseManager
+from acton_agent.agent import parse_streaming_events
+from acton_agent.agent.models import (
+    AgentPlanEvent,
+    AgentStepEvent,
+    AgentToolExecutionEvent,
+    AgentToolResultsEvent,
+    AgentFinalResponseEvent,
+)
 
 
 # Page configuration
@@ -22,6 +31,72 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Custom CSS for better styling
+st.markdown("""
+    <style>
+    /* Better chat message styling */
+    .stChatMessage {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    /* Section headers */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1f77b4;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid #e0e0e0;
+    }
+    
+    /* Tool execution cards */
+    .tool-card {
+        background-color: #f8f9fa;
+        border-left: 4px solid #6c757d;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border-radius: 0.3rem;
+    }
+    
+    .tool-card.executing {
+        border-left-color: #0d6efd;
+        background-color: #e7f1ff;
+    }
+    
+    .tool-card.success {
+        border-left-color: #28a745;
+        background-color: #d4edda;
+    }
+    
+    .tool-card.failed {
+        border-left-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    
+    /* Plan and thought boxes */
+    .info-box {
+        background-color: #e7f3ff;
+        border-left: 4px solid #2196F3;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 0.3rem;
+    }
+    
+    /* Answer box */
+    .answer-box {
+        background-color: #f0f8f0;
+        border-left: 4px solid #4caf50;
+        padding: 1rem;
+        margin-top: 1rem;
+        border-radius: 0.3rem;
+        font-size: 1.05rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 
 def initialize_session_state():
@@ -398,6 +473,70 @@ def configuration_page():
             st.error(f"❌ Failed to initialize agent: {e}")
 
 
+def render_step_expander_static(step, step_num, expanded=False):
+    """Render a single step in an expander for chat history."""
+    # Determine step title
+    step_type = step.get('type', 'unknown')
+    if step_type == 'plan':
+        title = f"Step {step_num}: 🗺️ Planning"
+    elif step_type == 'execution':
+        tool_count = len(step.get('tool_executions', {}))
+        title = f"Step {step_num}: 🔧 Executed {tool_count} tool(s)"
+    else:
+        title = f"Step {step_num}"
+    
+    with st.expander(title, expanded=expanded):
+        html_parts = []
+        
+        # Plan
+        if step.get('plan'):
+            html_parts.append(f"""
+            <div class="section-header">🗺️ Plan</div>
+            <div class="info-box">{step['plan']}</div>
+            """)
+        
+        # Reasoning
+        if step.get('thought'):
+            html_parts.append(f"""
+            <div class="section-header">💭 Reasoning</div>
+            <div class="info-box">{step['thought']}</div>
+            """)
+        
+        # Tools to execute
+        if step.get('tools'):
+            html_parts.append('<div class="section-header">🔧 Tools to Execute</div>')
+            for tool in step['tools']:
+                params_str = ", ".join([f"{k}={v}" for k, v in tool['params'].items()])
+                html_parts.append(f'<div class="tool-card"><strong>{tool["name"]}</strong>({params_str})</div>')
+        
+        # Tool executions
+        if step.get('tool_executions'):
+            html_parts.append('<div class="section-header">⚙️ Execution Results</div>')
+            for tool_id, exec_info in step['tool_executions'].items():
+                status = exec_info['status']
+                name = exec_info['name']
+                
+                if status == 'completed':
+                    card_class = 'success'
+                    icon = '✅'
+                    result = exec_info.get('result', '')
+                    content = f'{icon} <strong>{name}</strong>: {result}'
+                elif status == 'failed':
+                    card_class = 'failed'
+                    icon = '❌'
+                    error = exec_info.get('error', 'Unknown error')
+                    content = f'{icon} <strong>{name}</strong>: {error}'
+                else:
+                    card_class = ''
+                    icon = '⚙️'
+                    content = f'{icon} <strong>{name}</strong>'
+                
+                html_parts.append(f'<div class="tool-card {card_class}">{content}</div>')
+        
+        if html_parts:
+            st.markdown(''.join(html_parts), unsafe_allow_html=True)
+
+
 def chat_interface():
     """Display the chat interface."""
     agent = st.session_state.agent
@@ -405,138 +544,248 @@ def chat_interface():
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            # Show reasoning steps if available
-            if message.get("reasoning"):
-                reasoning = message["reasoning"]
-                with st.expander("🔍 View Agent Reasoning", expanded=False):
-                    # Show plan if available
-                    if reasoning.get("plan"):
-                        st.markdown("### 🧠 Plan")
-                        plan_data = reasoning["plan"]
-                        if isinstance(plan_data, list):
-                            plan_text = "\n".join([f"{i}. {step}" for i, step in enumerate(plan_data, 1)])
-                            st.info(plan_text)
-                        else:
-                            st.info(plan_data)
-                        st.markdown("---")
+            if message["role"] == "user":
+                st.markdown(message["content"])
+                if message.get("timestamp"):
+                    st.caption(f"🕐 {message['timestamp']}")
+            else:
+                # Render assistant message with steps in expanders
+                if message.get("steps"):
+                    # Separate intermediate steps from final step
+                    intermediate_steps = [s for s in message["steps"] if s.get('type') != 'final']
                     
-                    # Show each reasoning step
-                    for idx, step in enumerate(reasoning.get("steps", []), 1):
-                        st.markdown(f"### 🔧 Step {idx}")
-                        
-                        # Thought
-                        st.markdown("**💭 Thought:**")
-                        st.write(step["thought"])
-                        
-                        # Tool calls
-                        if step.get("tool_calls"):
-                            st.markdown("**🛠️ Tool Calls:**")
-                            for tool_call in step["tool_calls"]:
-                                with st.container():
-                                    col1, col2 = st.columns([1, 3])
-                                    with col1:
-                                        st.code(tool_call.tool_name, language=None)
-                                    with col2:
-                                        if tool_call.parameters:
-                                            import json
-                                            params_str = json.dumps(tool_call.parameters, indent=2)
-                                            st.code(params_str, language="json")
-                                        else:
-                                            st.write("_(no parameters)_")
-                        
-                        # Tool results
-                        if step.get("results"):
-                            st.markdown("**📊 Results:**")
-                            for result in step["results"]:
-                                if result.error:
-                                    st.error(f"❌ **{result.tool_name}**: {result.error}")
-                                else:
-                                    with st.success(f"✅ **{result.tool_name}**"):
-                                        if len(result.result) > 500:
-                                            st.text(result.result[:500] + "...")
-                                            with st.expander("Show full result"):
-                                                st.code(result.result, language="json")
-                                        else:
-                                            st.code(result.result, language="json")
-                        
-                        if idx < len(reasoning.get("steps", [])):
-                            st.markdown("---")
+                    # Render intermediate steps in expanders
+                    for i, step in enumerate(intermediate_steps, 1):
+                        render_step_expander_static(step, i, expanded=False)
+                
+                # Show final answer in chat message container
+                st.markdown(message["content"])
+                
+                if message.get("timestamp"):
+                    st.caption(f"🕐 {message['timestamp']}")
     
     # Chat input
     if prompt := st.chat_input("Ask me anything about your media..."):
+        # Add user message to history
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
         # Display user message
         with st.chat_message("user"):
             st.markdown(prompt)
+            st.caption(f"🕐 {timestamp}")
         
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt,
+            "timestamp": timestamp
+        })
         
         # Get assistant response with streaming
         with st.chat_message("assistant"):
-            response_placeholder = st.empty()
-            status_container = st.container()
+            # Track current state - organized by steps
+            steps = []  # List of step dictionaries
+            current_step_id = None
+            current_step = None
             
-            plan_info = None
-            reasoning_steps = []
-            final_response = ""
+            # Main placeholder for updating content
+            main_placeholder = st.empty()
+            
+            def render_current_state():
+                """Render the current state of the agent's response with step expanders."""
+                with main_placeholder.container():
+                    # Build list of all steps including current
+                    all_steps = steps + ([current_step] if current_step else [])
+                    
+                    # Separate final answer from intermediate steps
+                    intermediate_steps = []
+                    final_step = None
+                    
+                    for step in all_steps:
+                        if step.get('type') == 'final':
+                            final_step = step
+                        else:
+                            intermediate_steps.append(step)
+                    
+                    # Render intermediate steps in collapsed expanders
+                    for i, step in enumerate(intermediate_steps, 1):
+                        is_last_intermediate = (i == len(intermediate_steps) and not final_step)
+                        render_step_expander(step, i, expanded=is_last_intermediate)
+                    
+                    # Render final answer outside expanders
+                    if final_step and final_step.get('answer'):
+                        st.markdown(final_step['answer'])
+            
+            def render_step_expander(step, step_num, expanded=True):
+                """Render a single step in an expander."""
+                # Determine step title
+                step_type = step.get('type', 'unknown')
+                if step_type == 'plan':
+                    title = f"Step {step_num}: 🗺️ Planning"
+                elif step_type == 'execution':
+                    tool_count = len(step.get('tool_executions', {}))
+                    completed = sum(1 for t in step.get('tool_executions', {}).values() if t['status'] in ['completed', 'failed'])
+                    title = f"Step {step_num}: 🔧 Executing Tools ({completed}/{tool_count})"
+                else:
+                    title = f"Step {step_num}"
+                
+                with st.expander(title, expanded=expanded):
+                    html_parts = []
+                    
+                    # Plan
+                    if step.get('plan'):
+                        html_parts.append(f"""
+                        <div class="section-header">🗺️ Plan</div>
+                        <div class="info-box">{step['plan']}</div>
+                        """)
+                    
+                    # Reasoning
+                    if step.get('thought'):
+                        html_parts.append(f"""
+                        <div class="section-header">💭 Reasoning</div>
+                        <div class="info-box">{step['thought']}</div>
+                        """)
+                    
+                    # Tools to execute
+                    if step.get('tools'):
+                        html_parts.append('<div class="section-header">🔧 Tools to Execute</div>')
+                        for tool in step['tools']:
+                            params_str = ", ".join([f"{k}={v}" for k, v in tool['params'].items()])
+                            html_parts.append(f'<div class="tool-card"><strong>{tool["name"]}</strong>({params_str})</div>')
+                    
+                    # Tool executions
+                    if step.get('tool_executions'):
+                        html_parts.append('<div class="section-header">⚙️ Execution</div>')
+                        for tool_id, exec_info in step['tool_executions'].items():
+                            status = exec_info['status']
+                            name = exec_info['name']
+                            
+                            if status == 'started':
+                                card_class = 'executing'
+                                icon = '⚙️'
+                                content = f'{icon} Executing <strong>{name}</strong>...'
+                            elif status == 'completed':
+                                card_class = 'success'
+                                icon = '✅'
+                                result = exec_info.get('result', '')
+                                content = f'{icon} <strong>{name}</strong>: {result}'
+                            elif status == 'failed':
+                                card_class = 'failed'
+                                icon = '❌'
+                                error = exec_info.get('error', 'Unknown error')
+                                content = f'{icon} <strong>{name}</strong>: {error}'
+                            else:
+                                card_class = ''
+                                content = f'{name}'
+                            
+                            html_parts.append(f'<div class="tool-card {card_class}">{content}</div>')
+                    
+                    if html_parts:
+                        st.markdown(''.join(html_parts), unsafe_allow_html=True)
+                    else:
+                        st.info("🤔 Processing...")
             
             try:
-                for event in agent.agent.run_stream(prompt):
-                    if event.type == "agent_plan":
-                        plan_info = event.plan.plan
-                        if isinstance(plan_info, list):
-                            plan_display = "\n".join([f"{i}. {step}" for i, step in enumerate(plan_info, 1)])
-                        else:
-                            plan_display = str(plan_info)
-                        with status_container:
-                            st.info(f"🧠 **Planning:**\n{plan_display}")
+                # Stream events from agent using new parse_streaming_events API
+                for event in parse_streaming_events(agent.agent.run_stream(prompt)):
+                    step_id = getattr(event, "step_id", None)
                     
-                    elif event.type == "agent_step":
-                        step = event.step
-                        step_info = {
-                            "thought": step.thought,
-                            "tool_calls": step.tool_calls,
-                        }
-                        reasoning_steps.append(step_info)
+                    # Initialize step if needed (for first event or new step)
+                    if not current_step or (step_id and step_id != current_step_id):
+                        # Save previous step if it exists
+                        if current_step:
+                            steps.append(current_step)
                         
-                        with status_container:
-                            st.info(f"🔧 **Step {len(reasoning_steps)}:** {step.thought}")
-                            
-                            if step.tool_calls:
-                                tool_names = ", ".join([tc.tool_name for tc in step.tool_calls])
-                                with st.spinner(f"⚙️ Executing: {tool_names}"):
-                                    st.write("")
+                        # Start new step
+                        current_step_id = step_id
+                        current_step = {
+                            'type': 'unknown',
+                            'plan': '',
+                            'thought': '',
+                            'tools': [],
+                            'tool_executions': {},
+                            'answer': ''
+                        }
                     
-                    elif event.type == "tool_results":
-                        if reasoning_steps:
-                            reasoning_steps[-1]["results"] = event.results
-                        with status_container:
-                            st.success("✅ **Tools executed**")
+                    # Handle plan events
+                    if isinstance(event, AgentPlanEvent):
+                        current_step['type'] = 'plan'
+                        current_step['plan'] = event.plan.plan
+                        render_current_state()
                     
-                    elif event.type == "final_response":
-                        final_response = event.response.final_answer
-                        status_container.empty()
-                        response_placeholder.markdown(final_response)
+                    # Handle step events (tool thought)
+                    elif isinstance(event, AgentStepEvent):
+                        current_step['type'] = 'execution'
+                        if event.step.tool_thought:
+                            current_step['thought'] = event.step.tool_thought
+                        
+                        if event.step.tool_calls:
+                            current_step['tools'] = []
+                            for tc in event.step.tool_calls:
+                                current_step['tools'].append({
+                                    'name': tc.tool_name,
+                                    'params': tc.parameters
+                                })
+                        
+                        render_current_state()
+                    
+                    # Handle tool execution events
+                    elif isinstance(event, AgentToolExecutionEvent):
+                        if current_step['type'] != 'execution':
+                            current_step['type'] = 'execution'
+                        
+                        # Track tool execution by tool_call_id
+                        current_step['tool_executions'][event.tool_call_id] = {
+                            'name': event.tool_name,
+                            'status': event.status
+                        }
+                        
+                        if event.status in ["completed", "failed"]:
+                            if event.result:
+                                if event.result.success:
+                                    current_step['tool_executions'][event.tool_call_id]['result'] = event.result.result
+                                else:
+                                    current_step['tool_executions'][event.tool_call_id]['error'] = event.result.error
+                        
+                        render_current_state()
+                    
+                    # Handle final response events
+                    elif isinstance(event, AgentFinalResponseEvent):
+                        current_step['type'] = 'final'
+                        current_step['answer'] = event.response.final_answer
+                        render_current_state()
+                
+                # Save final response to history
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                
+                # Add final step if exists
+                if current_step:
+                    steps.append(current_step)
+                
+                # Build final content for history
+                final_answer = ""
+                for step in steps:
+                    if step.get('answer'):
+                        final_answer = step['answer']
                         break
                 
-                # Store reasoning data
-                reasoning_data = {}
-                if plan_info:
-                    reasoning_data["plan"] = plan_info
-                if reasoning_steps:
-                    reasoning_data["steps"] = reasoning_steps
+                if not final_answer:
+                    final_answer = "⚠️ No final answer provided"
                 
-                message_data = {"role": "assistant", "content": final_response}
-                if reasoning_data:
-                    message_data["reasoning"] = reasoning_data
-                st.session_state.messages.append(message_data)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": final_answer,
+                    "timestamp": timestamp,
+                    "steps": steps
+                })
                 
+                # Show timestamp
+                st.caption(f"🕐 {timestamp}")
+                    
             except Exception as e:
-                error_msg = f"❌ Error: {str(e)}"
-                response_placeholder.markdown(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
-        
-        st.rerun()
+                st.error(f"❌ Error: {str(e)}")
+                import traceback
+                with st.expander("🔍 Error Details", expanded=True):
+                    st.code(traceback.format_exc())
 
 
 def sidebar():
