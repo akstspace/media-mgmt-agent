@@ -1,8 +1,8 @@
 """
-Media Manager - Streamlit UI with Authentication
+Media Manager UI with Streamlit.
 
-A modern, secure web interface for managing your Radarr and Sonarr instances with AI.
-Features login system and encrypted credential storage.
+Demo usecase for Acton Agent framework.
+Run on local networks , not recommended for production use.
 """
 
 import os
