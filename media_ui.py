@@ -37,7 +37,7 @@ DEFAULT_PROVIDER = 'openrouter'
 
 @lru_cache(maxsize=1)
 def get_custom_css() -> str:
-    """Return custom CSS for better styling."""
+    """Return custom CSS for better styling with theme support."""
     return """
     <style>
     .stChatMessage {
@@ -49,51 +49,68 @@ def get_custom_css() -> str:
     .section-header {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #1f77b4;
+        color: var(--primary-color, #1f77b4);
         margin-top: 1rem;
         margin-bottom: 0.5rem;
         padding-bottom: 0.3rem;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid var(--secondary-background-color, #e0e0e0);
     }
     
     .tool-card {
-        background-color: #f8f9fa;
+        background-color: var(--secondary-background-color, #f8f9fa);
         border-left: 4px solid #6c757d;
         padding: 0.8rem;
         margin: 0.5rem 0;
         border-radius: 0.3rem;
+        color: var(--text-color, inherit);
+    }
+    
+    .tool-card em,
+    .tool-card strong,
+    .tool-card div {
+        color: var(--text-color, inherit);
     }
     
     .tool-card.executing {
         border-left-color: #0d6efd;
-        background-color: #e7f1ff;
+        background-color: rgba(13, 110, 253, 0.1);
+        color: var(--text-color, inherit);
     }
     
     .tool-card.success {
         border-left-color: #28a745;
-        background-color: #d4edda;
+        background-color: rgba(40, 167, 69, 0.1);
+        color: var(--text-color, inherit);
     }
     
     .tool-card.failed {
         border-left-color: #dc3545;
-        background-color: #f8d7da;
+        background-color: rgba(220, 53, 69, 0.1);
+        color: var(--text-color, inherit);
     }
     
     .info-box {
-        background-color: #e7f3ff;
+        background-color: rgba(33, 150, 243, 0.1);
         border-left: 4px solid #2196F3;
         padding: 1rem;
         margin: 0.5rem 0;
         border-radius: 0.3rem;
+        color: var(--text-color, inherit);
     }
     
     .answer-box {
-        background-color: #f0f8f0;
+        background-color: rgba(76, 175, 80, 0.1);
         border-left: 4px solid #4caf50;
         padding: 1rem;
         margin-top: 1rem;
         border-radius: 0.3rem;
         font-size: 1.05rem;
+        color: var(--text-color, inherit);
+    }
+    
+    /* Ensure all text elements inherit theme colors */
+    em, strong {
+        color: inherit;
     }
     
     @keyframes spin {
@@ -441,10 +458,10 @@ def build_tool_card_html(tool: Dict, exec_info: Optional[Dict]) -> str:
             'failed': ('failed', f'❌ <strong>Error:</strong> {exec_info.get("error", "Unknown error")}')
         }
         card_class, output_display = status_map.get(status, ('', '⏳ <em>Waiting...</em>'))
-        output_display = f'<div style="margin-top:0.5rem">{output_display}</div>'
+        output_display = f'<div style="margin-top:0.5rem; color:inherit;">{output_display}</div>'
     else:
         card_class = ''
-        output_display = '<div style="margin-top:0.5rem">⏳ <em>Waiting for execution...</em></div>'
+        output_display = '<div style="margin-top:0.5rem; color:inherit;">⏳ <em>Waiting for execution...</em></div>'
     
     return f'<div class="tool-card {card_class}">{input_display}{output_display}</div>'
 

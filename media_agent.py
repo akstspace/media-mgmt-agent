@@ -9,7 +9,7 @@ import os
 from typing import Optional, Literal
 from acton_agent import Agent
 from acton_agent.client import OpenAIClient, OpenRouterClient
-from media_tools import configure_radarr, configure_sonarr, get_all_media_tools
+from media_tools import configure_radarr, configure_sonarr, get_all_media_toolsets
 from prompts import build_system_prompt
 
 
@@ -86,10 +86,11 @@ class MediaAgent:
         else:
             raise ValueError(f"Unsupported LLM provider: {llm_provider}. Choose 'openai' or 'openrouter'")
         
-        # Get all media tools
-        print(f"🔧 Loading media management tools...")
-        tools = get_all_media_tools()
-        print(f"✓ Loaded {len(tools)} tools for {', '.join(services_configured)}")
+        # Get all media toolsets
+        print(f"🔧 Loading media management toolsets...")
+        toolsets = get_all_media_toolsets()
+        total_tools = sum(len(ts.tools) for ts in toolsets)
+        print(f"✓ Loaded {len(toolsets)} toolsets with {total_tools} tools for {', '.join(services_configured)}")
         
         # Build comprehensive system prompt from prompts module
         system_prompt = build_system_prompt(services_configured)
@@ -102,9 +103,9 @@ class MediaAgent:
             stream=True  # Enable token-by-token streaming
         )
         
-        # Register all tools
-        for tool in tools:
-            self.agent.register_tool(tool)
+        # Register all toolsets
+        for toolset in toolsets:
+            self.agent.register_toolset(toolset)
     
     def chat(self, message: str) -> str:
         """

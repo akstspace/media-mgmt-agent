@@ -1,24 +1,24 @@
 """
 Media Management Tools for Radarr and Sonarr
 
-This module provides RequestsTool instances for interacting with Radarr and Sonarr APIs.
+This module provides ToolSet instances for interacting with Radarr and Sonarr APIs.
 Configure the base URLs and API keys before using these tools.
 
 Usage:
     # Set your configuration
-    from media_tools import configure_radarr, get_radarr_tools
+    from media_tools import configure_radarr, get_radarr_toolset
     
     configure_radarr("http://localhost:7878", "your_api_key_here")
-    tools = get_radarr_tools()
+    toolset = get_radarr_toolset()
 
     # Use with agent
-    for tool in tools:
-        agent.register_tool(tool)
+    agent.register_toolset(toolset)
 """
 
 import json
 from typing import Any, Dict, List
 from acton_agent.tools import RequestsTool
+from acton_agent.agent.models import ToolSet
 
 RADARR_URL = None
 RADARR_API_KEY = None
@@ -1819,7 +1819,7 @@ sonarr_get_wanted_cutoff = SonarrWantedTool(
 )
 
 # =============================================================================
-# TOOL COLLECTIONS
+# TOOLSET COLLECTIONS
 # =============================================================================
 
 RADARR_TOOLS: List[RequestsTool] = [
@@ -1865,21 +1865,39 @@ SONARR_TOOLS: List[RequestsTool] = [
 
 ALL_MEDIA_TOOLS: List[RequestsTool] = RADARR_TOOLS + SONARR_TOOLS
 
+# Create ToolSets
+RADARR_TOOLSET = ToolSet(
+    name="radarr_tools",
+    description="Tools for managing Radarr movie library - search, add, monitor, and download movies",
+    tools=RADARR_TOOLS
+)
+
+SONARR_TOOLSET = ToolSet(
+    name="sonarr_tools", 
+    description="Tools for managing Sonarr TV series library - search, add, monitor, and download TV shows",
+    tools=SONARR_TOOLS
+)
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_radarr_tools() -> List[RequestsTool]:
-    """Get all Radarr tools"""
-    return RADARR_TOOLS
+def get_radarr_toolset() -> ToolSet:
+    """Get Radarr toolset for movie management"""
+    return RADARR_TOOLSET
 
-def get_sonarr_tools() -> List[RequestsTool]:
-    """Get all Sonarr tools"""
-    return SONARR_TOOLS
+def get_sonarr_toolset() -> ToolSet:
+    """Get Sonarr toolset for TV series management"""
+    return SONARR_TOOLSET
 
-def get_all_media_tools() -> List[RequestsTool]:
-    """Get all media management tools (Radarr + Sonarr)"""
-    return ALL_MEDIA_TOOLS
+def get_all_media_toolsets() -> List[ToolSet]:
+    """Get all media management toolsets (Radarr + Sonarr)"""
+    toolsets = []
+    if RADARR_URL and RADARR_API_KEY:
+        toolsets.append(RADARR_TOOLSET)
+    if SONARR_URL and SONARR_API_KEY:
+        toolsets.append(SONARR_TOOLSET)
+    return toolsets
 
 def configure_radarr(url: str, api_key: str) -> None:
     """

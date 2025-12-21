@@ -1,5 +1,5 @@
 # Core AI and Agent dependencies
-acton-agent==0.0.9
+acton-agent==0.0.10
 openai==2.12.0
 
 # Web UI
